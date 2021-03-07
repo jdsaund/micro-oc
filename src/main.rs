@@ -65,6 +65,11 @@ fn main() -> () {
             .takes_value(true)
             .help("The list of GPU indexes, space separated"))
         .subcommand(SubCommand::with_name("set")
+            .arg(Arg::with_name("gpuclock")
+                .long("gpuclock")
+                .multiple(true)
+                .takes_value(true)
+                .help("GPU clock offset (kHz)"))
             .arg(Arg::with_name("memclock")
                 .long("memclock")
                 .multiple(true)
@@ -108,9 +113,22 @@ fn main() -> () {
         ("set", Some(inner_matches)) => {
             let selected_gpus = select_gus(&gpus, &matches);
 
+            let gpuclock = parse_arg::<i32>(inner_matches, "gpuclock", selected_gpus.len());
             let memclock = parse_arg::<i32>(inner_matches, "memclock", selected_gpus.len());
 
             for (i, (global_idx, gpu)) in selected_gpus.iter().enumerate() {
+                // gpu clock
+                // TODO: validate using gpu.inner().vfp_ranges()
+                match &gpuclock {
+                    Some(gpuclock) => {
+                        let delta = KilohertzDelta(gpuclock[i]);
+
+                        println!("Setting GPU #{} graphics clock to {:?}", global_idx, delta);
+
+                        gpu.inner().set_pstates([(PState::P0, ClockDomain::Graphics, delta)].iter().cloned()).unwrap();
+                    },
+                    None => ()
+                };
                 // memory clock
                 // TODO: validate using gpu.inner().vfp_ranges()
                 match &memclock {
