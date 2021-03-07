@@ -79,7 +79,12 @@ fn main() -> () {
                 .long("plimit")
                 .multiple(true)
                 .takes_value(true)
-                .help("Power limit (%)")))
+                .help("Power limit (%)"))
+            .arg(Arg::with_name("vlock")
+                .long("vlock")
+                .multiple(true)
+                .takes_value(true)
+                .help("Lock voltage (uV)")))
         .subcommand(SubCommand::with_name("list"))
         .subcommand(SubCommand::with_name("reset"))
         .get_matches();
@@ -121,6 +126,7 @@ fn main() -> () {
             let gpuclock = parse_arg::<i32>(inner_matches, "gpuclock", selected_gpus.len());
             let memclock = parse_arg::<i32>(inner_matches, "memclock", selected_gpus.len());
             let plimit = parse_arg::<u32>(inner_matches, "plimit", selected_gpus.len());
+            let vlock = parse_arg::<u32>(inner_matches, "vlock", selected_gpus.len());
 
             for (i, (global_idx, gpu)) in selected_gpus.iter().enumerate() {
                 // gpu clock
@@ -160,6 +166,17 @@ fn main() -> () {
                     },
                     None => ()
                 };
+                // voltage lock
+                match &vlock {
+                    Some(voltages) => {
+                        let value = Microvolts(voltages[i]);
+
+                        println!("Setting GPU #{} lock voltage to {:?}", global_idx, value);
+
+                        gpu.set_vfp_lock(value).unwrap();
+                    },
+                    None => ()
+                };
             }
         },
         ("reset", Some(..)) => {
@@ -178,6 +195,9 @@ fn main() -> () {
 
                 // power limit
                 gpu.set_power_limits(info.power_limits.iter().map(|pl: &PowerLimit| pl.default)).unwrap();
+
+                // voltage lock
+                gpu.reset_vfp_lock().unwrap();
             }
         },
         ("", ..) => (),
