@@ -74,7 +74,12 @@ fn main() -> () {
                 .long("memclock")
                 .multiple(true)
                 .takes_value(true)
-                .help("Memory clock offset (kHz)")))
+                .help("Memory clock offset (kHz)"))
+            .arg(Arg::with_name("plimit")
+                .long("plimit")
+                .multiple(true)
+                .takes_value(true)
+                .help("Power limit (%)")))
         .subcommand(SubCommand::with_name("list"))
         .subcommand(SubCommand::with_name("reset"))
         .get_matches();
@@ -115,6 +120,7 @@ fn main() -> () {
 
             let gpuclock = parse_arg::<i32>(inner_matches, "gpuclock", selected_gpus.len());
             let memclock = parse_arg::<i32>(inner_matches, "memclock", selected_gpus.len());
+            let plimit = parse_arg::<u32>(inner_matches, "plimit", selected_gpus.len());
 
             for (i, (global_idx, gpu)) in selected_gpus.iter().enumerate() {
                 // gpu clock
@@ -141,6 +147,19 @@ fn main() -> () {
                     },
                     None => ()
                 };
+                // power limit
+                // TODO: validate using gpu.inner().power_limit_info()
+                match &plimit {
+                    Some(plimit) => {
+                        let power_limit = Percentage(plimit[i]);
+
+                        println!("Setting GPU #{} power limit to {:?}", global_idx, plimit[i]);
+
+                        let power_vec = vec![power_limit];
+                        gpu.set_power_limits(power_vec.iter().cloned()).unwrap();
+                    },
+                    None => ()
+                };
             }
         },
         ("reset", Some(..)) => {
@@ -154,6 +173,11 @@ fn main() -> () {
                 ].iter().cloned();
 
                 gpu.inner().set_pstates(deltas).unwrap();
+
+                let info: GpuInfo = gpu.info().unwrap();
+
+                // power limit
+                gpu.set_power_limits(info.power_limits.iter().map(|pl: &PowerLimit| pl.default)).unwrap();
             }
         },
         ("", ..) => (),
