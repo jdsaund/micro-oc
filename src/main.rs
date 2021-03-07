@@ -80,6 +80,11 @@ fn main() -> () {
                 .multiple(true)
                 .takes_value(true)
                 .help("Power limit (%)"))
+            .arg(Arg::with_name("tlimit")
+                .long("tlimit")
+                .multiple(true)
+                .takes_value(true)
+                .help("Temperature limit (deg C)"))
             .arg(Arg::with_name("vlock")
                 .long("vlock")
                 .multiple(true)
@@ -126,6 +131,7 @@ fn main() -> () {
             let gpuclock = parse_arg::<i32>(inner_matches, "gpuclock", selected_gpus.len());
             let memclock = parse_arg::<i32>(inner_matches, "memclock", selected_gpus.len());
             let plimit = parse_arg::<u32>(inner_matches, "plimit", selected_gpus.len());
+            let tlimit = parse_arg::<i32>(inner_matches, "tlimit", selected_gpus.len());
             let vlock = parse_arg::<u32>(inner_matches, "vlock", selected_gpus.len());
 
             for (i, (global_idx, gpu)) in selected_gpus.iter().enumerate() {
@@ -166,6 +172,20 @@ fn main() -> () {
                     },
                     None => ()
                 };
+                // temp limit
+                // TODO: validate using gpu.inner().thermal_limit_info()
+                match &tlimit {
+                    Some(tlimit) => {
+                        let (_, controllers) = gpu.inner().thermal_limit_info().unwrap();
+                        let temp_limit = Celsius(tlimit[i]);
+
+                        println!("Setting GPU #{} temperature limit to {:?}", global_idx, temp_limit);
+
+                        let temps_vec = vec![temp_limit; controllers.len() as usize];
+                        gpu.set_sensor_limits(temps_vec.iter().cloned()).unwrap();
+                    },
+                    None => ()
+                };
                 // voltage lock
                 match &vlock {
                     Some(voltages) => {
@@ -195,6 +215,9 @@ fn main() -> () {
 
                 // power limit
                 gpu.set_power_limits(info.power_limits.iter().map(|pl: &PowerLimit| pl.default)).unwrap();
+
+                // temp limit
+                gpu.set_sensor_limits(info.sensor_limits.iter().map(|pl: &SensorLimit| pl.default)).unwrap();
 
                 // voltage lock
                 gpu.reset_vfp_lock().unwrap();
